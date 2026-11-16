@@ -104,7 +104,7 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: 8.7
+          gradle-version: 8.11.1
 
       - name: Check signing key
         env:
@@ -132,16 +132,20 @@ jobs:
             echo "KEY_PASSWORD=$K_PASS"
           } >> "$GITHUB_ENV"
 
-      - name: Build signed APK
+      - name: Build signed APK and Play bundle
         working-directory: extracted/WebWrapper
-        run: gradle assembleRelease --no-daemon
+        run: gradle assembleRelease bundleRelease --no-daemon
 
-      - name: Name the APK
-        run: cp extracted/WebWrapper/app/build/outputs/apk/release/app-release.apk "$SUB_ID.apk"
+      - name: Name the files
+        run: |
+          cp extracted/WebWrapper/app/build/outputs/apk/release/app-release.apk "$SUB_ID.apk"
+          cp extracted/WebWrapper/app/build/outputs/bundle/release/app-release.aab "$SUB_ID.aab"
 
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: app-${{ inputs.submission_id }}
           name: App ${{ inputs.submission_id }}
           make_latest: false
-          files: ${{ inputs.submission_id }}.apk
+          files: |
+            ${{ inputs.submission_id }}.apk
+            ${{ inputs.submission_id }}.aab
