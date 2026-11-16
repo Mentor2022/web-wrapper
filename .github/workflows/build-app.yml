@@ -24,6 +24,14 @@ on:
         description: Comma-separated permissions the customer chose (notifications,camera,microphone,location,vibrate)
         required: false
         default: notifications
+      logo_url:
+        description: Signed link to the customer's logo (optional)
+        required: false
+        default: ''
+      config_json:
+        description: App settings as JSON (colors, lock). Written into the app during the build.
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -40,6 +48,8 @@ jobs:
       ICON_URL: ${{ inputs.icon_url }}
       FIREBASE_URL: ${{ inputs.firebase_url }}
       APP_PERMS: ${{ inputs.app_permissions }}
+      CONFIG_JSON: ${{ inputs.config_json }}
+      LOGO_URL: ${{ inputs.logo_url }}
     steps:
       - name: Check inputs
         run: |
@@ -50,7 +60,19 @@ jobs:
           printf '%s' "$APP_NAME" | perl -CS -ne 'exit 1 unless /\A[\p{L}\p{N} .,\-]{2,30}\z/' \
             || { echo "bad app name"; exit 1; }
           [[ "$ICON_URL" == https://* ]] || { echo "bad icon url"; exit 1; }
+          [[ -z "$LOGO_URL" || "$LOGO_URL" == https://* ]] || { echo "bad logo url"; exit 1; }
           [[ "$APP_PERMS" =~ ^[a-z,]*$ ]] || { echo "bad permissions"; exit 1; }
+
+      - name: Check app settings
+        run: |
+          if [ -z "$CONFIG_JSON" ]; then CONFIG_JSON='{"v":1,"theme":{"primary":"#00897B","splash":"#FFFFFF","bg":"#FFFFFF"}}'; fi
+          printf '%s' "$CONFIG_JSON" | jq -e '
+            (.v == 1) and
+            ([.theme.primary, .theme.splash, .theme.bg] | all(type == "string" and test("^#[0-9A-Fa-f]{6}$")))
+          ' >/dev/null || { echo "bad config_json"; exit 1; }
+          # keep only the keys we know, so nothing else can reach the app
+          printf '%s' "$CONFIG_JSON" | jq -c '{v: 1, theme: {primary: .theme.primary, splash: .theme.splash, bg: .theme.bg}, lock: (.lock == true)}' > "$RUNNER_TEMP/config.json"
+          cat "$RUNNER_TEMP/config.json"
 
       - uses: actions/checkout@v4
 
@@ -79,6 +101,15 @@ jobs:
           LINES="$LINES" perl -0pi -e 's/[ \t]*<!-- APP_PERMISSIONS -->\n?/$ENV{LINES}/' "$MF"
           grep -n 'uses-' "$MF"
 
+      - name: Apply app settings
+        run: |
+          APP=extracted/WebWrapper/app/src/main
+          mkdir -p "$APP/assets"
+          cp "$RUNNER_TEMP/config.json" "$APP/assets/config.json"
+          SPLASH=$(jq -r '.theme.splash' "$RUNNER_TEMP/config.json")
+          sed -i "s|<color name=\"splash_bg\">#[0-9A-Fa-f]*</color>|<color name=\"splash_bg\">$SPLASH</color>|" "$APP/res/values/colors.xml"
+          grep -n splash_bg "$APP/res/values/colors.xml"
+
       - name: Prepare icon
         run: |
           sudo apt-get install -y imagemagick >/dev/null
@@ -88,6 +119,14 @@ jobs:
           rm -f "$RES/drawable/ic_fg.xml"
           mkdir -p "$RES/drawable-xxxhdpi"
           convert "icon.src[0]" -background none -resize 260x260 -gravity center -extent 432x432 "PNG32:$RES/drawable-xxxhdpi/ic_fg.png"
+
+      - name: Add logo (optional)
+        if: ${{ inputs.logo_url != '' }}
+        run: |
+          curl -fsSL --max-time 60 --max-filesize 3000000 "$LOGO_URL" -o logo.src
+          identify "logo.src[0]" >/dev/null
+          mkdir -p extracted/WebWrapper/app/src/main/assets
+          convert "logo.src[0]" -background none -resize 800x400\> "PNG32:extracted/WebWrapper/app/src/main/assets/logo.png"
 
       - name: Add Firebase config (optional)
         if: ${{ inputs.firebase_url != '' }}
