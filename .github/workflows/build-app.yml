@@ -1,4 +1,4 @@
-name: Build customer appname: Build customer app
+name: Build customer app
 
 on:
   workflow_dispatch:
@@ -198,6 +198,15 @@ jobs:
         run: |
           cp extracted/WebWrapper/app/build/outputs/apk/release/app-release.apk "$SUB_ID.apk"
           cp extracted/WebWrapper/app/build/outputs/bundle/release/app-release.aab "$SUB_ID.aab"
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: app-${{ inputs.submission_id }}
+          name: App ${{ inputs.submission_id }}
+          make_latest: false
+          files: |
+            ${{ inputs.submission_id }}.apk
+            ${{ inputs.submission_id }}.aabd/WebWrapper/app/build/outputs/bundle/release/app-release.aab "$SUB_ID.aab"
 
       - uses: softprops/action-gh-release@v2
         with:
