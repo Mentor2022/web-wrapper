@@ -66,12 +66,19 @@ jobs:
       - name: Check app settings
         run: |
           if [ -z "$CONFIG_JSON" ]; then CONFIG_JSON='{"v":1,"theme":{"primary":"#00897B","splash":"#FFFFFF","bg":"#FFFFFF"}}'; fi
-          printf '%s' "$CONFIG_JSON" | jq -e '
+          ICONS='["home","search","shop","user","info","help","phone","mail","chat","heart","star","bell","map","menu","grid","calendar","play","book","wallet"]'
+          printf '%s' "$CONFIG_JSON" | jq -e --argjson icons "$ICONS" '
             (.v == 1) and
-            ([.theme.primary, .theme.splash, .theme.bg] | all(type == "string" and test("^#[0-9A-Fa-f]{6}$")))
+            ([.theme.primary, .theme.splash, .theme.bg] | all(type == "string" and test("^#[0-9A-Fa-f]{6}$"))) and
+            ((.offline_title // "") | type == "string" and length <= 60) and
+            ((.offline_msg // "") | type == "string" and length <= 160) and
+            ((.tabs // []) | (length == 0 or (length >= 2 and length <= 5)) and all(.[];
+               (.label | type == "string" and length >= 1 and length <= 14) and
+               (.url | type == "string" and test("^https://[^[:space:]\"]+$")) and
+               (.icon as $i | $icons | index($i) != null)))
           ' >/dev/null || { echo "bad config_json"; exit 1; }
           # keep only the keys we know, so nothing else can reach the app
-          printf '%s' "$CONFIG_JSON" | jq -c '{v: 1, theme: {primary: .theme.primary, splash: .theme.splash, bg: .theme.bg}, lock: (.lock == true)}' > "$RUNNER_TEMP/config.json"
+          printf '%s' "$CONFIG_JSON" | jq -c '{v: 1, theme: {primary: .theme.primary, splash: .theme.splash, bg: .theme.bg}, lock: (.lock == true), pull: (.pull != false), offline_title: (.offline_title // ""), offline_msg: (.offline_msg // ""), tabs: [(.tabs // [])[] | {label, url, icon}]}' > "$RUNNER_TEMP/config.json"
           cat "$RUNNER_TEMP/config.json"
 
       - uses: actions/checkout@v4
