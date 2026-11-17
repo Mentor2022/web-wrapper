@@ -182,9 +182,17 @@ jobs:
             echo "KEY_PASSWORD=$K_PASS"
           } >> "$GITHUB_ENV"
 
-      - name: Build signed APK and Play bundle
+            - name: Build signed APK and Play bundle
         working-directory: extracted/WebWrapper
-        run: gradle assembleRelease bundleRelease --no-daemon
+        run: |
+          set -o pipefail
+          gradle assembleRelease bundleRelease --no-daemon --console=plain 2>&1 | tee "$RUNNER_TEMP/build.log"
+
+      - name: Show build errors
+        if: failure()
+        run: |
+          echo "===== BUILD ERRORS (copy from here) ====="
+          grep -n -E "^e: |What went wrong|Execution failed|Caused by|Could not|Unresolved|Manifest merger|error:" -A4 "$RUNNER_TEMP/build.log" | head -90 || true
 
       - name: Name the files
         run: |
