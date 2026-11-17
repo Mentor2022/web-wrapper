@@ -72,13 +72,17 @@ jobs:
             ([.theme.primary, .theme.splash, .theme.bg] | all(type == "string" and test("^#[0-9A-Fa-f]{6}$"))) and
             ((.offline_title // "") | type == "string" and length <= 60) and
             ((.offline_msg // "") | type == "string" and length <= 160) and
+            ((.rate_url // "") | type == "string" and (. == "" or test("^https://[^[:space:]\"]+$")) and length <= 300) and
+            ((.shortcuts // []) | length <= 4 and all(.[];
+               (.label | type == "string" and length >= 1 and length <= 25) and
+               (.url | type == "string" and test("^https://[^[:space:]\"]+$")))) and
             ((.tabs // []) | (length == 0 or (length >= 2 and length <= 5)) and all(.[];
                (.label | type == "string" and length >= 1 and length <= 14) and
                (.url | type == "string" and test("^https://[^[:space:]\"]+$")) and
                (.icon as $i | $icons | index($i) != null)))
           ' >/dev/null || { echo "bad config_json"; exit 1; }
           # keep only the keys we know, so nothing else can reach the app
-          printf '%s' "$CONFIG_JSON" | jq -c '{v: 1, theme: {primary: .theme.primary, splash: .theme.splash, bg: .theme.bg}, lock: (.lock == true), pull: (.pull != false), offline_title: (.offline_title // ""), offline_msg: (.offline_msg // ""), tabs: [(.tabs // [])[] | {label, url, icon}]}' > "$RUNNER_TEMP/config.json"
+          printf '%s' "$CONFIG_JSON" | jq -c '{v: 1, theme: {primary: .theme.primary, splash: .theme.splash, bg: .theme.bg}, lock: (.lock == true), pull: (.pull != false), offline_title: (.offline_title // ""), offline_msg: (.offline_msg // ""), tabs: [(.tabs // [])[] | {label, url, icon}], exit_confirm: (.exit_confirm == true), rate_url: (.rate_url // ""), shortcuts: [(.shortcuts // [])[] | {label, url}]}' > "$RUNNER_TEMP/config.json"
           cat "$RUNNER_TEMP/config.json"
 
       - uses: actions/checkout@v4
